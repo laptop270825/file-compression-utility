@@ -13,8 +13,8 @@ typedef struct {
 
 typedef struct {
     const unsigned char *data;  // the bytes being read (not owned)
-    size_t size;                // number of bytes in data
-    size_t bit_pos;             // how many bits have been consumed so far
+    size_t size;                // number of bytes in data    
+    uint64_t bit_pos;           // how many bits have been consumed so far
 } BitReader;
 
 int  bitwriter_init(BitWriter *bw);

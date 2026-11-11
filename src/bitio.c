@@ -77,3 +77,36 @@ void bitwriter_free(BitWriter *bw) {
     bw->cur = 0;
     bw->nbits = 0;
 }
+
+void bitreader_init(BitReader *br, const unsigned char *data, size_t size) {
+    if (!br) {
+        return;
+    }
+    br->data = data;
+    br->size = size;
+    br->bit_pos = 0;
+}
+
+int bitreader_read_bits(BitReader *br, int nbits, uint32_t *value) {
+    if (!br || !value || nbits < 1 || nbits > 32) {
+        return -1; // Error: invalid parameters
+    }
+
+    // Check there are enough bits BEFORE reading, so a failed call
+    // leaves the reader's position unchanged.
+    uint64_t total_bits = (uint64_t)br->size * 8;
+    if (br->bit_pos > total_bits || total_bits - br->bit_pos < (uint64_t)nbits) {
+        return -1; // Error: not enough bits left
+    }
+
+    uint32_t result = 0;
+    for (int i = 0; i < nbits; ++i) {
+        size_t byte_index = (size_t)(br->bit_pos / 8);
+        int bit_index = 7 - (int)(br->bit_pos % 8); // bit 7 is the leftmost bit
+        unsigned bit = (br->data[byte_index] >> bit_index) & 1u;
+        result = (result << 1) | bit;
+        br->bit_pos++;
+    }
+    *value = result;
+    return 0; // Success
+}
