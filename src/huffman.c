@@ -85,3 +85,55 @@ done:
     heap_free(&heap); // runs on every path after heap_init succeeded
     return result;
 }
+
+static int assign_codes(const HuffTree *tree, int node, uint64_t bits, int length, HuffCode codes[HUFF_SYMBOLS]) {
+    if (node < 0 || node >= tree->node_count) {
+        return -1; // reached a null node, nothing to do
+    }
+    const HuffNode *n = &tree->nodes[node];
+    if (n->left == -1 && n->right == -1) {
+        // Leaf node: assign the code
+        codes[n->symbol].bits = bits;
+        codes[n->symbol].length = length;
+        return 0;
+    }
+    if (length >= 64) {
+        return -1; // code length exceeds 64 bits, which is not supported
+    }
+    // Internal node: traverse left and right
+    if (assign_codes(tree, n->left, (bits << 1), length + 1, codes) != 0) {
+        return -1; // propagate error
+    }
+    if (assign_codes(tree, n->right, (bits << 1) | 1, length + 1, codes) != 0) {
+        return -1; // propagate error
+    }
+    return 0;
+}
+
+int huffman_build_codes(const HuffTree *tree, HuffCode codes[HUFF_SYMBOLS]) {
+    if (tree == NULL || codes == NULL) {
+        return -1; // invalid parameters
+    }
+    // Initialize all codes to zero length
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        codes[i].bits = 0;
+        codes[i].length = 0;
+    }
+    if (tree->root == -1) {
+        return 0; // empty tree, all codes remain zero length
+    }
+    if (tree->root < 0 || tree->root >= tree->node_count) {
+        return -1; // invalid root index
+    }
+    if (tree->nodes[tree->root].left == -1 && tree->nodes[tree->root].right == -1) {
+        return -1; // invalid tree structure, root cannot be a leaf
+    }
+    if (assign_codes(tree, tree->root, 0, 0, codes) != 0) {
+        for (int i = 0; i < HUFF_SYMBOLS; ++i) { // never leave a half-built table
+            codes[i].bits = 0;
+            codes[i].length = 0;
+        }
+        return -1;
+    }
+    return 0;
+}

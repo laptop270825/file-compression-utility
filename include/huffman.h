@@ -28,4 +28,16 @@ typedef struct {
 
 int huffman_build_tree(const uint64_t freq[HUFF_SYMBOLS], HuffTree *tree);
 
+/* It builds the Huffman codes from the constructed tree. */
+/* The table is filled with zeroes first, that unused bytes get length 0 */
+/* It returns 0 on success, or -1 on bad arguments or failure. */
+/* It modifies the codes parameter to contain the constructed Huffman codes. */
+/* On failure, every entry is reset to length 0*/
+typedef struct {
+    uint64_t bits;   /* the code, in the lowest `length` bits; its first bit is the highest of those */
+    int length;      /* number of bits in the code; 0 means this byte has no code */
+} HuffCode;
+
+int huffman_build_codes(const HuffTree *tree, HuffCode codes[HUFF_SYMBOLS]);
+
 #endif /* CMPZ_HUFFMAN_H */
