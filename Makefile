@@ -5,19 +5,23 @@ SRC     := $(wildcard src/*.c)
 OBJ     := $(patsubst src/%.c,build/%.o,$(SRC))
 LIB_OBJ := $(filter-out build/main.o,$(OBJ))
 
+TEST_SRC   := $(wildcard tests/test_*.c)
+TEST_NAMES := $(patsubst tests/%.c,%,$(TEST_SRC))
+
 ifeq ($(OS),Windows_NT)
-    TARGET    := build/cmpz.exe
-    TEST_BIN  := build/test_bitio.exe
-    RUN_TEST  := build\test_bitio.exe
-    MKBUILD   := mkdir build
-    RMBUILD   := rmdir /s /q build
+    EXE     := .exe
+    MKBUILD := mkdir build
+    RMBUILD := rmdir /s /q build
+    RUNPATH  = $(subst /,\,$(1))
 else
-    TARGET    := build/cmpz
-    TEST_BIN  := build/test_bitio
-    RUN_TEST  := ./build/test_bitio
-    MKBUILD   := mkdir -p build
-    RMBUILD   := rm -rf build
+    EXE     :=
+    MKBUILD := mkdir -p build
+    RMBUILD := rm -rf build
+    RUNPATH  = ./$(1)
 endif
+
+TARGET    := build/cmpz$(EXE)
+TEST_BINS := $(addprefix build/,$(addsuffix $(EXE),$(TEST_NAMES)))
 
 .PHONY: all test clean
 
@@ -29,17 +33,20 @@ $(TARGET): $(OBJ)
 build/%.o: src/%.c | build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-build/test_bitio.o: tests/test_bitio.c | build
+# Each tests/test_X.c becomes its own program, linked with every module except main.c
+build/test_%.o: tests/test_%.c | build
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TEST_BIN): build/test_bitio.o $(LIB_OBJ)
+$(TEST_BINS): build/%$(EXE): build/%.o $(LIB_OBJ)
 	$(CC) $^ -o $@
 
 build:
 	$(MKBUILD)
 
-test: $(TEST_BIN)
-	$(RUN_TEST)
+test: $(addprefix run-,$(TEST_NAMES))
+
+run-%: build/%$(EXE)
+	$(call RUNPATH,build/$*$(EXE))
 
 clean:
 	-$(RMBUILD)

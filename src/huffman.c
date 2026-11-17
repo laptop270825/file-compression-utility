@@ -137,3 +137,38 @@ int huffman_build_codes(const HuffTree *tree, HuffCode codes[HUFF_SYMBOLS]) {
     }
     return 0;
 }
+
+int huffman_encode(const unsigned char *data, size_t size,
+                   const HuffCode codes[HUFF_SYMBOLS], BitWriter *bw) {
+    if (codes == NULL || bw == NULL || (data == NULL && size>0 )) { /* TODO: the invalid cases: codes is NULL, bw is NULL,
+           or data is NULL while size > 0 */
+        return -1; // invalid parameters
+    }
+    for (size_t i = 0; i < size; ++i) {
+        HuffCode c = codes[data[i]];
+        if (c.length == 0) {
+            return -1; // this byte has no code: the table does not match the data
+        }
+        if (c.length <= 32) {
+            int cal = bitwriter_write_bits(bw, c.bits, c.length); // TODO: one call to bitwriter_write_bits with the code and its length.
+            if (cal != 0) {
+                return -1; // write failure
+            }
+            // TODO: one call to bitwriter_write_bits with the code and its length.
+            //       If it returns non-zero, return -1.
+        } else {
+            int cal1 = bitwriter_write_bits(bw, c.bits >> 32, c.length - 32); // TODO: two calls. First the leading (c.length - 32) bits, which are c.bits >> 32. Then the low 32 bits, which are c.bits.
+            if (cal1 != 0) {
+                return -1; // write failure
+            }
+            int cal2 = bitwriter_write_bits(bw, c.bits, 32); // TODO: two calls. First the leading (c.length - 32) bits, which are c.bits >> 32. Then the low 32 bits, which are c.bits.
+            if (cal2 != 0) {
+                return -1; //write failure
+            // TODO: two calls. First the leading (c.length - 32) bits, which are
+            //       c.bits >> 32. Then the low 32 bits, which are c.bits.
+            //       If either returns non-zero, return -1.
+        }
+    }
+}
+    return 0;
+}

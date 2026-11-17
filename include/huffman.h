@@ -1,7 +1,10 @@
 #ifndef CMPZ_HUFFMAN_H
 #define CMPZ_HUFFMAN_H
 
+#include <stddef.h>
 #include <stdint.h>
+
+#include "bitio.h"
 
 #define HUFF_SYMBOLS   256
 #define HUFF_MAX_NODES (2 * HUFF_SYMBOLS - 1)   /* 511 */
@@ -39,5 +42,22 @@ typedef struct {
 } HuffCode;
 
 int huffman_build_codes(const HuffTree *tree, HuffCode codes[HUFF_SYMBOLS]);
+
+/*
+ * huffman_encode - write the code of every input byte into a bit stream.
+ *
+ * data  : the bytes to encode. May be NULL only when size is 0.
+ * size  : number of bytes in data.
+ * codes : the code table from huffman_build_codes.
+ * bw    : an initialised BitWriter that receives the bits. This function does
+ *         NOT call bitwriter_finish; the caller does that when all data is written.
+ *
+ * Returns 0 on success. Returns -1 for a NULL argument, a write failure, or a
+ * byte whose code has length 0 (the table does not match the data).
+ * Codes longer than 32 bits are written in two parts, because
+ * bitwriter_write_bits accepts at most 32 bits per call.
+ */
+int huffman_encode(const unsigned char *data, size_t size,
+                   const HuffCode codes[HUFF_SYMBOLS], BitWriter *bw);
 
 #endif /* CMPZ_HUFFMAN_H */
