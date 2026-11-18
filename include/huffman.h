@@ -60,4 +60,20 @@ int huffman_build_codes(const HuffTree *tree, HuffCode codes[HUFF_SYMBOLS]);
 int huffman_encode(const unsigned char *data, size_t size,
                    const HuffCode codes[HUFF_SYMBOLS], BitWriter *bw);
 
+/*
+ * huffman_decode - read `count` symbols from a bit stream and rebuild the bytes.
+ *
+ * br    : a BitReader positioned at the first code. It advances past the codes read.
+ * tree  : the same tree the encoder used (rebuilt from the same counts).
+ * count : how many bytes to decode. The decoder stops after exactly this many,
+ *         so the zero padding in the last byte is never mistaken for data.
+ * out   : receives the bytes; the caller provides room for `count` bytes.
+ *         May be NULL only when count is 0.
+ *
+ * Returns 0 on success. Returns -1 for a NULL argument, an empty or malformed
+ * tree (while count > 0), or a stream that ends before `count` symbols are decoded.
+ * It never reads or writes out of bounds, even for corrupt input.
+ */
+int huffman_decode(BitReader *br, const HuffTree *tree, size_t count, unsigned char *out);
+
 #endif /* CMPZ_HUFFMAN_H */

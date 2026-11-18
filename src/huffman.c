@@ -172,3 +172,43 @@ int huffman_encode(const unsigned char *data, size_t size,
 }
     return 0;
 }
+
+int huffman_decode(BitReader *br, const HuffTree *tree, size_t count, unsigned char *out) {
+    if (br == NULL || tree == NULL || (out == NULL && count > 0)) {
+        return -1; // invalid parameters
+    }
+    if (count == 0) {
+        return 0; // nothing to decode
+    }
+    if (tree->root < 0 || tree->root >= tree->node_count) {
+        return -1; // empty or invalid tree
+    }
+    if (tree->nodes[tree->root].left == -1 && tree->nodes[tree->root].right == -1) {
+        return -1; // a leaf root would decode without reading any bits
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        int node = tree->root;
+        while (tree->nodes[node].left != -1 && tree->nodes[node].right != -1) {
+            uint32_t bit = 0;
+            int cal = bitreader_read_bits(br, 1, &bit); // TODO: read ONE bit with bitreader_read_bits(br, 1, &bit).
+            if (cal != 0) {
+                return -1; // the stream ended too early
+            }
+            // TODO: read ONE bit with bitreader_read_bits(br, 1, &bit).
+            //       If it returns non-zero, return -1 (the stream ended too early).
+            if (bit == 1) {
+                node = tree->nodes[node].right; // TODO: set node to the right child if bit is 1, otherwise to the left child.
+            } else {
+                node = tree->nodes[node].left; // TODO: set node to the right child if bit is 1, otherwise to the left child.
+            }
+            // TODO: set node to the right child if bit is 1, otherwise to the left child.
+            if (node < 0 || node >= tree->node_count) {
+                return -1; // the tree is malformed
+            }
+            // TODO: if the new node is outside 0 .. tree->node_count - 1, return -1.
+        }
+        out[i] = (unsigned char)tree->nodes[node].symbol;
+    }
+    return 0;
+}
