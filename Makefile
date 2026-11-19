@@ -23,7 +23,7 @@ endif
 TARGET    := build/cmpz$(EXE)
 TEST_BINS := $(addprefix build/,$(addsuffix $(EXE),$(TEST_NAMES)))
 
-.PHONY: all test clean
+.PHONY: all test e2e check clean
 
 all: $(TARGET)
 
@@ -43,10 +43,22 @@ $(TEST_BINS): build/%$(EXE): build/%.o $(LIB_OBJ)
 build:
 	$(MKBUILD)
 
+# End-to-end tests run the real program; tests/e2e_cli.c is a standalone program
+build/e2e_cli.o: tests/e2e_cli.c | build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/e2e_cli$(EXE): build/e2e_cli.o
+	$(CC) $^ -o $@
+
 test: $(addprefix run-,$(TEST_NAMES))
 
 run-%: build/%$(EXE)
 	$(call RUNPATH,build/$*$(EXE))
+
+e2e: $(TARGET) build/e2e_cli$(EXE)
+	$(call RUNPATH,build/e2e_cli$(EXE)) $(call RUNPATH,$(TARGET))
+
+check: test e2e
 
 clean:
 	-$(RMBUILD)
