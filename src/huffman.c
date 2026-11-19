@@ -212,3 +212,288 @@ int huffman_decode(BitReader *br, const HuffTree *tree, size_t count, unsigned c
     }
     return 0;
 }
+
+int huffman_code_lengths(const HuffCode codes[HUFF_SYMBOLS], unsigned char lengths[HUFF_SYMBOLS]) {
+    // TODO: return -1 if codes or lengths is NULL
+    if (codes == NULL || lengths == NULL) {
+        return -1;
+    }
+    // TODO: set all 256 lengths to 0 first
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        lengths[i] = 0;
+    }
+    // TODO: for each i, if codes[i].length is < 0 or > 64: set all 256 lengths back to 0 and return -1
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        if (codes[i].length < 0 || codes[i].length > 64) {
+            for (int j = 0; j < HUFF_SYMBOLS; ++j) {
+                lengths[j] = 0;
+            }
+            return -1;
+        }
+        //       otherwise lengths[i] = (unsigned char)codes[i].length
+        lengths[i] = (unsigned char)codes[i].length;
+    }
+    return 0;
+}
+
+int huffman_canonical_codes(const unsigned char lengths[HUFF_SYMBOLS], HuffCode codes[HUFF_SYMBOLS]) {
+    // TODO: NULL check, then reset all 256 codes to bits = 0, length = 0
+    if (lengths == NULL || codes == NULL) {
+        return -1;
+    }
+    // Step 1: count how many bytes have each length.
+    int count[65] = {0};
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        codes[i].bits = 0;
+        codes[i].length = 0;
+    }
+    // TODO: for each byte, if lengths[i] > 64 return -1; else count[lengths[i]]++
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        if (lengths[i] > 64) {
+            return -1;
+        } else {
+            count[lengths[i]]++;
+        }
+    }
+    count[0] = 0; // length 0 means "no code": it uses no code space
+
+    // Step 2: validate. `left` = how many codes of the current length are still unused.
+    int left = 1;
+    for (int len = 1; len <= 64; ++len) {
+        // TODO: left = left * 2 - count[len];
+        left = left * 2 - count[len];
+        // TODO: if left < 0 -> return -1 (over-subscribed)
+        if (left < 0) {
+            return -1; // over-subscribed
+        }
+        // TODO: if left > HUFF_SYMBOLS -> return -1 (more free slots than bytes to fill them)
+        if (left > HUFF_SYMBOLS) {
+            return -1; // more free slots than bytes to fill them
+        }
+    }
+    // TODO: if left != 0 return -1 (incomplete)
+    if (left != 0) {
+        return -1; // incomplete
+    }
+
+    // Step 3: first code of each length.
+    uint64_t first_code[65] = {0};
+    uint64_t code = 0;
+    for (int len = 1; len <= 64; ++len) {
+        // TODO: code = (code + (uint64_t)count[len - 1]) << 1;
+        code = (code + (uint64_t)count[len - 1]) << 1;
+        // TODO: first_code[len] = code;
+        first_code[len] = code;
+    }
+
+    // Step 4: hand out the codes in byte order 0..255.
+    // next_code[len] starts at first_code[len] and goes up by one for every byte of that length.
+    uint64_t next_code[65];
+    for (int len = 0; len <= 64; ++len) next_code[len] = first_code[len];
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        int len = lengths[i];
+        if (len > 0) {
+            // TODO: codes[i].bits = next_code[len]++;   codes[i].length = len;
+            codes[i].bits = next_code[len]++;
+            codes[i].length = len;
+        }
+    }
+    return 0;
+}
+
+/*static void reset_tree(HuffTree *tree) {
+    tree->root = -1;
+    tree->node_count = 0;
+}
+
+int huffman_tree_from_codes(const HuffCode codes[HUFF_SYMBOLS], HuffTree *tree) {
+    // TODO: NULL check; reset_tree(tree)
+    if (codes == NULL || tree == NULL) {
+        printf("fail at line %d\n", __LINE__);
+        goto fail;
+    }
+
+    // Leaves: node i is byte i. freq 0, left -1, right -1, symbol i.
+    // TODO: loop 0..255 and fill them in
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        tree->nodes[i].freq = 0;
+        tree->nodes[i].left = -1;
+        tree->nodes[i].right = -1;
+        tree->nodes[i].symbol = i;
+    }
+
+    // TODO: validate every length is 0..64 (else return -1) and count how many bytes have a code (`used`).
+    int used = 0;
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        if (codes[i].length < 0 || codes[i].length > 64) {
+            printf("fail at line %d\n", __LINE__);
+            goto fail; // invalid length
+        }
+        if (codes[i].length > 0) {
+            used++;
+        }
+    }
+    // TODO: if used == 0, return 0 (empty table -> empty tree)
+    if (used == 0) {
+        printf("fail at line %d\n", __LINE__);
+        goto fail; // no used symbols
+    }
+
+    int next_id = HUFF_SYMBOLS;
+    int root = next_id++; // the root is the first internal node
+    // TODO: initialise nodes[root]: freq 0, left -1, right -1, symbol -1
+    for (int i = 0; i < HUFF_MAX_NODES; ++i) {
+        tree->nodes[root].freq = 0;
+        tree->nodes[root].left = -1;
+        tree->nodes[root].right = -1;
+        tree->nodes[root].symbol = -1;
+    }
+
+    for (int sym = 0; sym < HUFF_SYMBOLS; ++sym) {
+        int len = codes[sym].length;
+        if (len == 0) continue;
+        // TODO: if len < 64 and (codes[sym].bits >> len) != 0 -> goto fail   (bits don't fit)
+        if (len < 64 && (codes[sym].bits >> len) != 0) {
+            printf("fail at line %d\n", __LINE__);
+            goto fail; // bits don't fit
+        }
+        int cur = root;
+        for (int k = len - 1; k >= 0; --k) {            // from the first bit to the last
+            int bit = (int)((codes[sym].bits >> k) & 1u);
+            int *slot = bit ? &tree->nodes[cur].right : &tree->nodes[cur].left;
+            if (k == 0) {
+                // last bit: the slot must be empty, then point it at the leaf `sym`
+                // TODO: if (*slot != -1) goto fail;   *slot = sym;
+                if (*slot != -1) {
+                    printf("fail at line %d\n", __LINE__);
+                    goto fail; // slot already occupied
+                }
+            } else {
+                // middle bit: follow the existing node, or create a new internal node
+                // TODO: if (*slot == -1): if next_id >= HUFF_MAX_NODES goto fail; make a new internal
+                //       node at next_id (freq 0, left -1, right -1, symbol -1); *slot = next_id++;
+                if (*slot == -1) {
+                    if (next_id >= HUFF_MAX_NODES) {
+                        printf("fail at line %d\n", __LINE__);
+                        goto fail; // no more room for new nodes
+                    }
+                    tree->nodes[next_id].freq = 0;
+                    tree->nodes[next_id].left = -1;
+                    tree->nodes[next_id].right = -1;
+                    tree->nodes[next_id].symbol = -1;
+                    *slot = next_id++;
+                }
+                // TODO: else if (*slot < HUFF_SYMBOLS) goto fail;   // we hit a leaf: a shorter code is a prefix of this one
+                else if (*slot < HUFF_SYMBOLS) {
+                    printf("fail at line %d\n", __LINE__);
+                    goto fail; // we hit a leaf: a shorter code is a prefix of this one
+                }
+                cur = *slot;
+            }
+        }
+    }
+
+    // TODO: every internal node (index 256 .. next_id-1) must have both children, else goto fail
+    for (int i = HUFF_SYMBOLS; i < next_id; ++i) {
+        if (tree->nodes[i].left == -1 || tree->nodes[i].right == -1) {
+            printf("fail at line %d\n", __LINE__);
+            goto fail; // internal node missing a child
+        }
+    }
+    tree->root = root;
+    tree->node_count = next_id;
+    return 0;
+
+fail:
+    reset_tree(tree);
+    return -1;
+}*/
+
+static void reset_tree(HuffTree *tree) {
+    tree->root = -1;
+    tree->node_count = 0;
+}
+
+int huffman_tree_from_codes(const HuffCode codes[HUFF_SYMBOLS], HuffTree *tree) {
+    if (codes == NULL || tree == NULL) {
+        return -1; // invalid parameters
+    }
+    reset_tree(tree);
+
+    // The leaves: node i is byte i.
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        tree->nodes[i].freq = 0;
+        tree->nodes[i].left = -1;
+        tree->nodes[i].right = -1;
+        tree->nodes[i].symbol = i;
+    }
+
+    int used = 0;
+    for (int i = 0; i < HUFF_SYMBOLS; ++i) {
+        if (codes[i].length < 0 || codes[i].length > 64) {
+            return -1;
+        }
+        if (codes[i].length > 0) {
+            used++;
+        }
+    }
+    if (used == 0) {
+        return 0; // no codes: an empty tree
+    }
+
+    int next_id = HUFF_SYMBOLS;
+    int root = next_id++; // the root is the first internal node
+    tree->nodes[root].freq = 0;
+    tree->nodes[root].left = -1;
+    tree->nodes[root].right = -1;
+    tree->nodes[root].symbol = -1;
+
+    for (int sym = 0; sym < HUFF_SYMBOLS; ++sym) {
+        int len = codes[sym].length;
+        if (len == 0) {
+            continue;
+        }
+        if (len < 64 && (codes[sym].bits >> len) != 0) {
+            goto fail; // bits do not fit in the length
+        }
+        int cur = root;
+        for (int k = len - 1; k >= 0; --k) {
+            int bit = (int)((codes[sym].bits >> k) & 1u);
+            int *slot = bit ? &tree->nodes[cur].right : &tree->nodes[cur].left;
+            if (k == 0) {
+                if (*slot != -1) {
+                    goto fail; // this place is already taken: equal codes, or a prefix of another
+                }
+                *slot = sym;
+            } else {
+                if (*slot == -1) {
+                    if (next_id >= HUFF_MAX_NODES) {
+                        goto fail; // too many nodes
+                    }
+                    tree->nodes[next_id].freq = 0;
+                    tree->nodes[next_id].left = -1;
+                    tree->nodes[next_id].right = -1;
+                    tree->nodes[next_id].symbol = -1;
+                    *slot = next_id++;
+                } else if (*slot < HUFF_SYMBOLS) {
+                    goto fail; // a shorter code ends here: it is a prefix of this one
+                }
+                cur = *slot;
+            }
+        }
+    }
+
+    // Every internal node must have both children, or a stream could end in a dead end.
+    for (int i = HUFF_SYMBOLS; i < next_id; ++i) {
+        if (tree->nodes[i].left == -1 || tree->nodes[i].right == -1) {
+            goto fail;
+        }
+    }
+    tree->root = root;
+    tree->node_count = next_id;
+    return 0;
+
+fail:
+    reset_tree(tree);
+    return -1;
+}

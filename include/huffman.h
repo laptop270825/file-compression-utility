@@ -76,4 +76,47 @@ int huffman_encode(const unsigned char *data, size_t size,
  */
 int huffman_decode(BitReader *br, const HuffTree *tree, size_t count, unsigned char *out);
 
+/*
+ * huffman_code_lengths - copy the length of every code into a plain byte array.
+ *
+ * codes   : a code table (from huffman_build_codes or huffman_canonical_codes).
+ * lengths : output, lengths[b] is the code length of byte b (0 = no code).
+ *           This is the 256-byte table that is stored in the compressed file.
+ *
+ * Returns 0 on success. Returns -1 for a NULL argument or a length outside
+ * 0..64; lengths is then all zeros.
+ */
+int huffman_code_lengths(const HuffCode codes[HUFF_SYMBOLS], unsigned char lengths[HUFF_SYMBOLS]);
+
+/*
+ * huffman_canonical_codes - turn code lengths into the canonical codes.
+ *
+ * lengths : lengths[b] is the code length of byte b, 0 meaning "no code".
+ *           Untrusted input (it comes from a file), so it is fully validated.
+ * codes   : output table. Codes are handed out in order of increasing length,
+ *           and for equal lengths in increasing byte value; each code is the
+ *           previous one plus 1, shifted left by one bit when the length grows.
+ *
+ * Returns 0 on success. Returns -1 for a NULL argument, a length above 64, or
+ * lengths that are not a complete prefix code (over-subscribed or with unused
+ * code space). That includes all zeros and a single byte with length 1.
+ * On failure every entry of codes is reset to length 0.
+ */
+int huffman_canonical_codes(const unsigned char lengths[HUFF_SYMBOLS], HuffCode codes[HUFF_SYMBOLS]);
+
+/*
+ * huffman_tree_from_codes - build a decoding tree from a code table.
+ *
+ * codes : a code table, for example from huffman_canonical_codes.
+ * tree  : output, in the same layout as huffman_build_tree: leaf b is node b,
+ *         internal nodes start at index 256. Works with huffman_decode.
+ *
+ * Returns 0 on success. Returns -1 for a NULL argument, a length above 64, bits
+ * that do not fit in the length, two codes where one is the start of the other
+ * (or equal), or a code that leaves a branch unfinished.
+ * An all-zero table gives an empty tree (root = -1) and success.
+ * On failure the tree is reset to empty.
+ */
+int huffman_tree_from_codes(const HuffCode codes[HUFF_SYMBOLS], HuffTree *tree);
+
 #endif /* CMPZ_HUFFMAN_H */
