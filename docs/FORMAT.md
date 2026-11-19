@@ -103,6 +103,7 @@ A reader must reject the file (and must not crash or read out of bounds) if:
 9. (compressed) after decoding, there is more than one byte of data left over, or
    any padding bit is not zero;
 10. the CRC-32 of the decoded data does not equal the stored CRC-32.
+11. Reject any flag bits other than the defined ones.
 
 ## Writer rules
 
