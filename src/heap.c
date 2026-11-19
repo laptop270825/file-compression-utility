@@ -31,11 +31,10 @@ static void sift_up(MinHeap *h, size_t i) {
 }
 
 static void sift_down(MinHeap *h, size_t i) {
-    size_t left, right, smallest;
-    while (left < h->size || right < h->size) {
-        left = 2 * i + 1;
-        right = 2 * i + 2;
-        smallest = i;
+    while (2 * i + 1 < h->size) {              // as long as node i has a left child
+        size_t left = 2 * i + 1;
+        size_t right = 2 * i + 2;
+        size_t smallest = i;
 
         if (left < h->size && item_less(h->items[left], h->items[smallest])) {
             smallest = left;
