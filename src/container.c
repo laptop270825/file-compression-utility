@@ -122,7 +122,7 @@ done:
     return result;
 }
 
-int cmpz_compress(const unsigned char *in, size_t in_size,
+/*int cmpz_compress(const unsigned char *in, size_t in_size,
                   unsigned char **out, size_t *out_size) {
     // TODO: return -1 if out or out_size is NULL, or (in == NULL && in_size > 0)
     if (out == NULL || out_size == NULL || (in == NULL && in_size > 0)) {
@@ -163,6 +163,35 @@ int cmpz_compress(const unsigned char *in, size_t in_size,
     }
 
     // Only now, when everything succeeded, touch the outputs.
+    *out = buf;
+    *out_size = total;
+    return 0;
+}*/
+
+int cmpz_compress(const unsigned char *in, size_t in_size,
+                  unsigned char **out, size_t *out_size) {
+    if (out == NULL || out_size == NULL || (in == NULL && in_size > 0)) {
+        return -1; // invalid parameters
+    }
+    if (in_size > SIZE_MAX - CMPZ_HEADER_SIZE) {
+        return -1; // the total size would overflow
+    }
+
+    // Huffman mode when it makes the file smaller (never for an empty input).
+    if (in_size > 0 && try_huffman(in, in_size, out, out_size) == 0) {
+        return 0;
+    }
+
+    // Otherwise stored mode: header + the original bytes.
+    size_t total = CMPZ_HEADER_SIZE + in_size;
+    unsigned char *buf = malloc(total);
+    if (buf == NULL) {
+        return -1; // out of memory
+    }
+    write_header(buf, CMPZ_FLAG_STORED, in_size, crc32_update(0, in, in_size));
+    if (in_size > 0) {
+        memcpy(buf + CMPZ_HEADER_SIZE, in, in_size);
+    }
     *out = buf;
     *out_size = total;
     return 0;
