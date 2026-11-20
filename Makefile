@@ -23,7 +23,7 @@ endif
 TARGET    := build/cmpz$(EXE)
 TEST_BINS := $(addprefix build/,$(addsuffix $(EXE),$(TEST_NAMES)))
 
-.PHONY: all test e2e check clean
+.PHONY: all test e2e check fuzz clean
 
 all: $(TARGET)
 
@@ -59,6 +59,18 @@ e2e: $(TARGET) build/e2e_cli$(EXE)
 	$(call RUNPATH,build/e2e_cli$(EXE)) $(call RUNPATH,$(TARGET))
 
 check: test e2e
+
+# The fuzzer links with every module except main.c; FUZZ_N sets how many inputs to try
+FUZZ_N ?= 100000
+
+build/fuzz_cmpz.o: tests/fuzz_cmpz.c | build
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/fuzz_cmpz$(EXE): build/fuzz_cmpz.o $(LIB_OBJ)
+	$(CC) $^ -o $@
+
+fuzz: build/fuzz_cmpz$(EXE)
+	$(call RUNPATH,build/fuzz_cmpz$(EXE)) $(FUZZ_N)
 
 clean:
 	-$(RMBUILD)
