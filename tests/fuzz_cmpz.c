@@ -60,6 +60,9 @@ static uint32_t read_u32(const unsigned char *p) {
 
 static unsigned long count_rejected = 0, count_accepted = 0, count_constructed = 0, count_roundtrip = 0;
 static int failures = 0;
+static int verbose_corpus = 0, list_accepted = 0;   /* debugging aids: -v and -l on the command line */
+static unsigned long current_it = 0;
+
 
 static void fail(const char *why, const unsigned char *input, size_t len) {
     char name[64];
@@ -98,6 +101,10 @@ static void check_input(const unsigned char *buf, size_t len) {
         return;
     }
     count_accepted++;
+    if (list_accepted && len >= HEADER) {
+        printf("accepted #%lu: %llu bytes, flags %u, size field %llu\n", current_it,
+               (unsigned long long)len, (unsigned)buf[5], (unsigned long long)read_u64(buf + 8));
+    }
 
     /* Accepted: the result must agree with the header the file claims. */
     if (len < HEADER || memcmp(buf, "CMPZ", 4) != 0) {
@@ -378,12 +385,21 @@ int main(int argc, char *argv[]) {
 
     if (argc >= 2) iterations = strtoul(argv[1], NULL, 10);
     if (argc >= 3) rng_state ^= strtoull(argv[2], NULL, 10) * 0x9E3779B97F4A7C15ULL;
+    if (argc >= 4 && strcmp(argv[3], "-v") == 0) verbose_corpus = 1;
+    if (argc >= 4 && strcmp(argv[3], "-l") == 0) list_accepted = 1;
     if (rng_state == 0) rng_state = 1;
 
     build_corpus();
+    if (verbose_corpus) {
+        for (int i = 0; i < corpus_count; ++i) {
+            printf("corpus %d: %llu bytes, flags %u, crc %08lX\n", i, (unsigned long long)corpus[i].len,
+                   (unsigned)corpus[i].data[5], (unsigned long)crc32_update(0, corpus[i].data, corpus[i].len));
+        }
+    }
     printf("fuzzing %lu inputs (%d valid files as source material)\n", iterations, corpus_count);
 
     for (unsigned long it = 0; it < iterations; ++it) {
+        current_it = it;
         uint32_t which = below(100);
         if (which < 10) {                                            /* pure random bytes */
             size_t len = below(600);
