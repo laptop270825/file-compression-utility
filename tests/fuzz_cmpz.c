@@ -178,6 +178,10 @@ static void build_corpus(void) {
 }
 
 /* ---------- strategy 1: damage a valid file ---------- */
+/* NOTE: in C the order in which the parts of ONE expression are evaluated is unspecified, e.g. in
+ * a[f()] = g() either call may run first. Because f and g both use the random generator here,
+ * different compilers would then produce different inputs. So every random call below gets its
+ * own statement, which fixes the order. */
 
 static void mutate(unsigned char *b, size_t *plen, size_t cap) {
     size_t len = *plen;
@@ -186,14 +190,24 @@ static void mutate(unsigned char *b, size_t *plen, size_t cap) {
     for (int s = 0; s < steps; ++s) {
         switch (below(9)) {
         case 0:                                                   /* flip one bit */
-            if (len > 0) b[below((uint32_t)len)] ^= (unsigned char)(1u << below(8));
+            if (len > 0) {
+                size_t pos = below((uint32_t)len);              /* one call per statement: see the note above */
+                unsigned bit = below(8);
+                b[pos] ^= (unsigned char)(1u << bit);
+            }
             break;
         case 1:                                                   /* random byte */
-            if (len > 0) b[below((uint32_t)len)] = (unsigned char)below(256);
+            if (len > 0) {
+                size_t pos = below((uint32_t)len);
+                b[pos] = (unsigned char)below(256);
+            }
             break;
         case 2: {                                                 /* extreme byte */
             const unsigned char extremes[] = {0x00, 0x01, 0x7F, 0x80, 0xFF};
-            if (len > 0) b[below((uint32_t)len)] = extremes[below(5)];
+            if (len > 0) {
+                size_t pos = below((uint32_t)len);
+                b[pos] = extremes[below(5)];
+            }
             break;
         }
         case 3:                                                   /* truncate */
@@ -259,12 +273,18 @@ static size_t structured_garbage(unsigned char *b) {
         break;
     case 1: {                                                     /* a few small lengths */
         uint32_t k = 2 + below(40);
-        for (uint32_t j = 0; j < k; ++j) b[HEADER + below(TABLE)] = (unsigned char)(1 + below(12));
+        for (uint32_t j = 0; j < k; ++j) {
+            uint32_t pos = below(TABLE);
+            b[HEADER + pos] = (unsigned char)(1 + below(12));
+        }
         break;
     }
     default:                                                      /* a table that is nearly complete */
         for (int i = 0; i < TABLE; ++i) b[HEADER + i] = 8;
-        b[HEADER + below(TABLE)] = (unsigned char)below(3) ? 0 : 9;
+        {
+            uint32_t pos = below(TABLE);
+            b[HEADER + pos] = (unsigned char)(below(3) ? 0 : 9);
+        }
         break;
     }
     for (size_t i = 0; i < payload; ++i) b[HEADER + TABLE + i] = (unsigned char)below(256);
@@ -285,7 +305,8 @@ static int build_valid(unsigned char *file, size_t *file_len, unsigned char *exp
     uint32_t k = 2 + below(255);
     for (uint32_t j = 0; j < k; ++j) {
         uint32_t sym = below(256);
-        freq[sym] += 1 + (rnd() % (1u << below(20)));
+        uint32_t shift = below(20);
+        freq[sym] += 1 + (rnd() % (1u << shift));
     }
     for (int i = 0; i < HUFF_SYMBOLS; ++i) if (freq[i] > 0) distinct++;
     if (distinct < 2) return -1;
@@ -354,7 +375,7 @@ static void check_round_trip(void) {
 
     switch (below(6)) {
     case 0: for (size_t i = 0; i < n; ++i) data[i] = (unsigned char)below(256); break;           /* random */
-    case 1: { uint32_t a = 1 + below(255); for (size_t i = 0; i < n; ++i) data[i] = (unsigned char)(below(a) * below(a) / a); break; }
+    case 1: { uint32_t a = 1 + below(255); for (size_t i = 0; i < n; ++i) { uint32_t x = below(a); uint32_t y = below(a); data[i] = (unsigned char)(x * y / a); } break; }
     case 2: { size_t i = 0; while (i < n) { unsigned char v = (unsigned char)below(256); size_t run = 1 + below(400); while (run-- && i < n) data[i++] = v; } break; }
     case 3: memset(data, (int)below(256), n); break;                                              /* one value */
     case 4: for (size_t i = 0; i < n; ++i) data[i] = (unsigned char)(i * 7); break;               /* a pattern */
